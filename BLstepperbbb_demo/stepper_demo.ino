@@ -104,14 +104,14 @@ void loop() {
 #include <SoftwareSerial.h>
 #include <Arduino.h>
 
-const int stepsPerRevolution = 2048;  // 28BYJ48电机旋转一周需要的步数
+const int stepsPerRevolution = 4096;  // 28BYJ48电机旋转一周需要的步数
 
 // 电机接在引脚8 ~ 11
 Stepper myStepper(stepsPerRevolution, 8, 9, 10, 11);
 
 SoftwareSerial BTserial(2, 3); // 蓝牙模块的TX、RX分别连接到Arduino的数字2、3号引脚
 
-const int relayPins[] = {4, 5, 6}; // 假设有三个继电器，分别连接到引脚4, 5, 6，后期可以直接加引脚
+const int relayPins[] = {4}; // 假设有三个继电器，分别连接到引脚4 ，后期可以直接加引脚
 const int numPumps = sizeof(relayPins) / sizeof(relayPins[0]); // 蠕动泵的数量
 int relayDuration=0;//泵工作时间数
 // 定义变量来存储电机转动的角度和当前选择的蠕动泵
@@ -121,7 +121,7 @@ int selectedPump = 0;
 void setup() {
   Serial.begin(9600);
   BTserial.begin(9600);
-  myStepper.setSpeed(20);
+  myStepper.setSpeed(5);
   
   // 初始化继电器引脚
   for (int i = 0; i < numPumps; i++) {
@@ -140,7 +140,17 @@ void loop() {
     }
     // 第二个信号：控制继电器的工作时间
     else if (receivedCommand == 'A' || receivedCommand == 'B') {
-      relayDuration = receivedCommand == 'A' ? 1000 : 2000; // 'A'对应1秒，'B'对应2秒
+      relayDuration = receivedCommand == 'A' ? 5000 : 10000; // 'A'对应1秒，'B'对应2秒
+    }
+    // 第三个信号：电机归位
+    else if (receivedCommand == '4') {
+      
+        Serial.print("Rotating to ");
+        Serial.print("归位");
+        Serial.println(" steps.");
+        myStepper.step(-angleToRotate); // 电机归位
+        delay(1000);
+        angleToRotate = 0; // 重置角度变量，等待下一次命令
       
     }
   }
@@ -152,20 +162,22 @@ void loop() {
     Serial.println(" steps.");
     myStepper.step(angleToRotate);
     delay(1000);
-    
   }
-  delay(5000);//等一下泵泵
-  controlPump(selectedPump, relayDuration);//泵工作ing
-  
-  //电机复位
-  if (angleToRotate != 0) {
-  Serial.print("Rotating to ");
-  Serial.print("归位");
-  Serial.println(" steps.");
-  myStepper.step(-angleToRotate);
-  delay(1000);
-  angleToRotate = 0; // 重置角度变量，等待下一次命令 
-  }
+  angleToRotate = 0;
+  controlPump(selectedPump, relayDuration); // 泵工作ing
+  relayDuration = 0; // 转动时间归零
+ 
+
+  // 电机复位
+  // 这部分代码可以删除，因为电机归位已经在接收到'4'时处理了
+  // if (angleToRotate != 0) {
+  //   Serial.print("Rotating to ");
+  //   Serial.print("归位");
+  //   Serial.println(" steps.");
+  //   myStepper.step(-angleToRotate);
+  //   delay(1000);
+  //   angleToRotate = 0; // 重置角度变量，等待下一次命令 
+  // }
 }
 
 // 控制指定蠕动泵的函数
@@ -180,6 +192,7 @@ void controlPump(int pumpNumber, int duration) {
     digitalWrite(relayPins[pumpNumber - 1], HIGH); // 打开继电器
     delay(duration);
     digitalWrite(relayPins[pumpNumber - 1], LOW); // 关闭继电器
+    
   }
 }
 
